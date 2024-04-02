@@ -5,7 +5,7 @@ import frappe
 from frappe.model.document import Document
 
 class BulkPaymentEntry(Document):
-	# Pass
+	
 
 	def on_submit(self):
 		self.payment_entry()
@@ -13,19 +13,25 @@ class BulkPaymentEntry(Document):
 	
 	@frappe.whitelist()
 	def set_party_type(self):
-		if self.party_type and self.payment_type:
-			for i in self.get("bulk_payment_entry_details"):
-				i.party_type = self.party_type
-				i.payment_type = self.payment_type
-    
-			for i in self.get("deduction"):
-				i.party_type = self.party_type
-				i.payment_type = self.payment_type
-    
-			for i in self.get("taxes"):
-				i.party_type = self.party_type
-				i.payment_type = self.payment_type
-				
+		# if self.party_type and self.payment_type:
+		# 	for entry in self.get(["bulk_payment_entry_details", "deduction", "taxes"]):
+		# 		for i in entry:
+		# 			i.party_type = self.party_type
+		# 			i.payment_type = self.payment_type
+
+		for i in self.get("bulk_payment_entry_details"):
+			i.party_type = self.party_type
+			i.payment_type = self.payment_type
+
+		for i in self.get("deduction"):
+			i.party_type = self.party_type
+			i.payment_type = self.payment_type
+
+		for i in self.get("taxes"):
+			i.party_type = self.party_type
+			i.payment_type = self.payment_type
+		
+            
 
 
 	@frappe.whitelist()
@@ -95,28 +101,6 @@ class BulkPaymentEntry(Document):
 
 
 	@frappe.whitelist()
-	def calculate_taxes(self):
-		for i in self.get("bulk_payment_entry_details"):
-			total_amount = 0
-			for j in self.get("taxes", filters={'party': i.party, 'reference_id': i.reference_id}):
-				if j.add_deduct_tax == "Add" and j.charge_type == "Actual":
-					j.total = float(i.paid_amount + j.tax_amount or 0)
-					j.rate = None
-				elif j.add_deduct_tax == "Deduct" and j.charge_type == "Actual":
-					j.total = float(i.paid_amount - j.tax_amount or 0)
-					j.rate = None
-				elif j.add_deduct_tax == "Add" and j.charge_type == "On Paid Amount":
-					j.tax_amount = float(((j.rate / 100)) * (i.paid_amount or 0))
-					j.total = float(i.paid_amount + j.tax_amount or 0)
-					total_amount += j.tax_amount
-				elif j.add_deduct_tax == "Deduct" and j.charge_type == "On Paid Amount":
-					j.tax_amount = float((j.rate / 100) * (i.paid_amount or 0))
-					j.total = float(i.paid_amount - j.tax_amount or 0)
-					total_amount += j.tax_amount
-			i.total = total_amount
-
-
-	@frappe.whitelist()
 	def get_accounts(self):
 		self.get_bank_account()
 		self.get_paid_to_account()
@@ -168,22 +152,31 @@ class BulkPaymentEntry(Document):
 				i.paid_from = mode_of_payment_account
 			elif i.party_type == "Customer" and i.payment_type == "Receive":
 				i.paid_to = mode_of_payment_account
-				
+
+	
+
 
 	@frappe.whitelist()
 	def call_two_in_one(self):
-		self.get_entries()
+		self.check_invoice()
+		self.check_orders()
+
+	@frappe.whitelist()
+	def check_orders(self):
 		self.get_entries_so()
-		self.get_entries_pi()
 		self.get_entries_po()
 		
+	@frappe.whitelist()
+	def check_invoice(self):
+		self.get_entries()
+		self.get_entries_pi()
 		
 
 	@frappe.whitelist()
 	def get_entries(self):
 		for i in self.get("bulk_payment_entry_details"):
-			i.reference_id = i.name
-			if i.check ==1 and i.party_type == "Customer" and self.payment_type =="Receive":
+			# i.reference_id = i.name
+			if i.party_type == "Customer" and self.payment_type =="Receive":
 			
 				doc = frappe.get_list("Sales Invoice", 
 							filters={"customer": i.party,"posting_date": ["between", [i.from_date, i.to_date]], "outstanding_amount": (">", 0), "status":["in",["Overdue","Partly Paid","Unpaid","Unpaid and Discounted","Overdue and Discounted","Partly Paid and Discounted"]]},
@@ -198,21 +191,21 @@ class BulkPaymentEntry(Document):
 															"reference_doctype":"Sales Invoice",
 															"reference_name":d.name,
 															"total_amount":d.grand_total,
-															'reference_id':i.name,
+															'reference_id':i.reference_id,
 															"outstanding_amount":d.outstanding_amount,
 															"posting_date":d.posting_date,
 
 															})
 			else:
-				if i.check ==1 and i.party_type == "Customer" and self.payment_type =="Pay":
+				if i.party_type == "Customer" and self.payment_type =="Pay":
 					frappe.throw("Cannot Pay to Customer without any negative outstanding invoice")
 
 
 	@frappe.whitelist()
 	def get_entries_so(self):
 		for i in self.get("bulk_payment_entry_details"):
-			i.reference_id = i.name		
-			if i.check2 ==1 and i.party_type == "Customer" and self.payment_type =="Receive":
+			# i.reference_id = i.name		
+			if i.party_type == "Customer" and self.payment_type =="Receive":
 				doc = frappe.get_list("Sales Order", 
 						filters={"customer": i.party,"transaction_date": ["between", [i.from_date1, i.to_date1]],"billing_status":["in",["Not Billed","Partly Billed"]]},
 						fields=["name","grand_total","rounded_total","advance_paid","transaction_date"],)
@@ -226,22 +219,22 @@ class BulkPaymentEntry(Document):
 															"reference_doctype":"Sales Order",
 															"reference_name":d.name,
 															"total_amount":d.grand_total,
-															'reference_id':i.name,
+															'reference_id':i.reference_id,
 															"outstanding_amount":(d.rounded_total)-(d.advance_paid),
 															"posting_date":d.transaction_date,
 						
 													})
 
 			else:
-				if i.check2 ==1 and i.party_type == "Customer" and self.payment_type =="Pay":
+				if i.party_type == "Customer" and self.payment_type =="Pay":
 					frappe.throw("Cannot Pay to Customer without any negative outstanding invoice")
 
 
 	@frappe.whitelist()
 	def get_entries_pi(self):
 		for i in self.get("bulk_payment_entry_details"):
-			i.reference_id = i.name
-			if i.check ==1 and i.party_type == "Supplier" and self.payment_type =="Pay":
+			# i.reference_id = i.name
+			if i.party_type == "Supplier" and self.payment_type =="Pay":
 			
 				doc = frappe.get_list("Purchase Invoice", 
 							filters={"supplier": i.party,"posting_date": ["between", [i.from_date, i.to_date]],"outstanding_amount": (">", 0),"status":["in",["Overdue", "Partly Paid", "Unpaid"]]},
@@ -262,7 +255,7 @@ class BulkPaymentEntry(Document):
 
 															})
 			else:
-				if i.check ==1 and i.party_type == "Supplier" and self.payment_type =="Receive":
+				if i.party_type == "Supplier" and self.payment_type =="Receive":
 					frappe.throw("Cannot Receive from Supplier without any negative outstanding invoice")
 
 
@@ -270,8 +263,8 @@ class BulkPaymentEntry(Document):
 	@frappe.whitelist()
 	def get_entries_po(self):
 		for i in self.get("bulk_payment_entry_details"):
-			i.reference_id = i.name
-			if i.check2 ==1 and i.party_type == "Supplier" and self.payment_type =="Pay":
+			# i.reference_id = i.name
+			if i.party_type == "Supplier" and self.payment_type =="Pay":
 				doc = frappe.get_list("Purchase Order", 
 							filters={"supplier": i.party,"transaction_date": ["between", [i.from_date1, i.to_date1]],"status":["in",["To Bill", "To Receive and Bill", "To Receive" ]]},
 							fields=["name","grand_total","rounded_total","advance_paid","transaction_date"],)
@@ -291,52 +284,191 @@ class BulkPaymentEntry(Document):
 
 															})
 			else:
-				if i.check2 ==1 and i.party_type == "Supplier" and self.payment_type =="Receive":
+				if i.party_type == "Supplier" and self.payment_type =="Receive":
 					frappe.throw("Cannot Receive from Supplier without any negative outstanding invoice")
+
+
+	@frappe.whitelist()
+	def get_outstanding(self):
+		self.invoices()
+		self.orders()
+
+	@frappe.whitelist()
+	def invoices(self):
+		self.get_all_sinvoices()
+		self.get_all_pinvoices()
+	
+	@frappe.whitelist()
+	def get_all_sinvoices(self):
+		for i in self.get("bulk_payment_entry_details"):
+			if i.party_type == "Customer" and self.payment_type =="Receive" and self.from_date and self.to_date:	
+				doc = frappe.get_list("Sales Invoice", 
+							filters={"customer": i.party,"posting_date": ["between", [self.from_date, self.to_date]], "outstanding_amount": (">", 0), "status":["in",["Overdue","Partly Paid","Unpaid","Unpaid and Discounted","Overdue and Discounted","Partly Paid and Discounted"]]},
+							fields=["name","grand_total","outstanding_amount","posting_date"],)
+
+				# frappe.throw(str(doc))
+				if(doc):
+					for d in doc:
+						self.append('payment_reference', {
+															"party_type":i.party_type,
+															"party_name":i.party_name,
+															"reference_doctype":"Sales Invoice",
+															"reference_name":d.name,
+															"total_amount":d.grand_total,
+															'reference_id':i.name,
+															"outstanding_amount":d.outstanding_amount,
+															"posting_date":d.posting_date,
+
+															})
+			else:
+				if i.party_type == "Customer" and self.payment_type =="Pay":
+					frappe.throw("Cannot Pay to Customer without any negative outstanding invoice")
+
+	@frappe.whitelist()
+	def get_all_pinvoices(self):
+		for i in self.get("bulk_payment_entry_details"):
+			# i.reference_id = i.name
+			if i.party_type == "Supplier" and self.payment_type =="Pay" and self.from_date and self.to_date:
+			
+				doc = frappe.get_list("Purchase Invoice", 
+							filters={"supplier": i.party,"posting_date": ["between", [self.from_date, self.to_date]],"outstanding_amount": (">", 0),"status":["in",["Overdue", "Partly Paid", "Unpaid"]]},
+							fields=["name","grand_total","outstanding_amount","posting_date"],)
+
+				# frappe.throw(str(doc))
+				if(doc):
+					for d in doc:
+						self.append('payment_reference', {
+															"party_type":i.party_type,
+															"party_name":i.party_name,
+															"reference_doctype":"Purchase Invoice",
+															"reference_name":d.name,
+															"total_amount":d.grand_total,
+															'reference_id':i.reference_id,
+															"outstanding_amount":d.outstanding_amount,
+															"posting_date":d.posting_date,
+
+															})
+			else:
+				if i.party_type == "Supplier" and self.payment_type =="Receive":
+					frappe.throw("Cannot Receive from Supplier without any negative outstanding invoice")
+	
+	
+
+	@frappe.whitelist()
+	def orders(self):
+		self.get_all_sorders()
+		self.get_all_porders()
+
+	@frappe.whitelist()
+	def get_all_sorders(self):
+		for i in self.get("bulk_payment_entry_details"):
+			# i.reference_id = i.name		
+			if i.party_type == "Customer" and self.payment_type =="Receive" and self.from_date and self.to_date:
+				doc = frappe.get_list("Sales Order", 
+						filters={"customer": i.party,"transaction_date": ["between", [self.from_date, self.to_date]],"billing_status":["in",["Not Billed","Partly Billed"]]},
+						fields=["name","grand_total","rounded_total","advance_paid","transaction_date"],)
+
+				# frappe.throw(str(doc))
+				if(doc):
+					for d in doc:
+						self.append('payment_reference', {
+															"party_type":i.party_type,
+															"party_name":i.party_name,
+															"reference_doctype":"Sales Order",
+															"reference_name":d.name,
+															"total_amount":d.grand_total,
+															'reference_id':i.reference_id,
+															"outstanding_amount":(d.rounded_total)-(d.advance_paid),
+															"posting_date":d.transaction_date,
+						
+													})
+
+			else:
+				if i.party_type == "Customer" and self.payment_type =="Pay":
+					frappe.throw("Cannot Pay to Customer without any negative outstanding invoice")
+
+	@frappe.whitelist()
+	def get_all_porders(self):
+		for i in self.get("bulk_payment_entry_details"):
+			# i.reference_id = i.name
+			if i.party_type == "Supplier" and self.payment_type =="Pay" and self.from_date and self.to_date:
+				doc = frappe.get_list("Purchase Order", 
+							filters={"supplier": i.party,"transaction_date": ["between", [self.from_date, self.to_date]],"status":["in",["To Bill", "To Receive and Bill", "To Receive" ]]},
+							fields=["name","grand_total","rounded_total","advance_paid","transaction_date"],)
+
+				# frappe.throw(str(doc))
+				if(doc):
+					for d in doc:
+						self.append('payment_reference', {
+															"party_type":i.party_type,
+															"party_name":i.party_name,
+															"reference_doctype":"Purchase Order",
+															"reference_name":d.name,
+															"total_amount":d.grand_total,
+															'reference_id':i.reference_id,
+															"outstanding_amount":(d.rounded_total)-(d.advance_paid),
+															"posting_date":d.transaction_date,
+
+															})
+			else:
+				if i.party_type == "Supplier" and self.payment_type =="Receive":
+					frappe.throw("Cannot Receive from Supplier without any negative outstanding invoice")
+
 
 	@frappe.whitelist()
 	def allocated_trigger(self):
 		self.check_yield()
-		self.get_allocatedsum()
-
-	@frappe.whitelist()
-	def get_allocatedsum(self):
-		# frappe.throw("hiiiii")
-		for i in self.get("bulk_payment_entry_details"):
-			total_asum = 0  # Initialize outside the loop
-			for j in self.get("payment_reference", {'reference_id': i.reference_id}):
-				allocated_amount = 0
-				if j.allocated_amount:
-					total_asum += j.allocated_amount  
-			i.paid_amount = total_asum
 		
 		
-
-	
 	@frappe.whitelist()
 	def calculate_taxes(self):
-		for i in self.get("bulk_payment_entry_details"):
-			
+		for i in self.get("bulk_payment_entry_details"):	
+			total_value=0
+			flag=True
 			for j in self.get("taxes", filters={'party': i.party, 'reference_id': i.reference_id}):
 				if j.add_deduct_tax == "Add" and j.charge_type == "Actual":
-					j.total = float(i.paid_amount + j.tax_amount or 0)
+					if(flag):
+						j.total = float(i.paid_amount + j.tax_amount or 0)
+						total_value=j.total
+						flag=False
+					else:
+						j.total = float(total_value + j.tax_amount or 0)
+						total_value= j.total 
 					j.rate = None
 				elif j.add_deduct_tax == "Deduct" and j.charge_type == "Actual":
-					j.total = float(i.paid_amount - j.tax_amount or 0)
+					if(flag):
+						j.total = float(i.paid_amount - j.tax_amount or 0)
+						total_value=j.total
+						flag=False
+					else:
+						j.total = float(total_value - j.tax_amount or 0)
+						total_value= j.total 
 					j.rate = None
 				elif j.add_deduct_tax == "Add" and j.charge_type == "On Paid Amount":
-					frappe.throw("hiii")
-					frappe.msgprint("hii")
-					j.tax_amount = float((j.rate / 100) * i.paid_amount or 0)
-					frappe.throw(str(j.tax_amount))
-					j.total = float(i.paid_amount + j.tax_amount or 0)
-					frappe.msgprint(str(j.total))
+					if(flag):
+						j.tax_amount = float((j.rate / 100) * i.paid_amount or 0)
+						j.total = float(i.paid_amount + j.tax_amount or 0)
+						total_value = j.total
+						flag = False
+					else:
+						j.tax_amount = float((j.rate / 100) * i.paid_amount or 0)
+						j.total = float(total_value + j.tax_amount or 0)
+						total_value = j.total
+					
 				elif j.add_deduct_tax == "Deduct" and j.charge_type == "On Paid Amount":
-					j.tax_amount = float((j.rate / 100) * i.paid_amount or 0)
-					j.total = float(i.paid_amount - j.tax_amount or 0)
-			
+					if(flag):
+						j.tax_amount = float((j.rate / 100) * i.paid_amount or 0)
+						j.total = float(i.paid_amount - j.tax_amount or 0)
+						total_value = j.total
+						flag = False
+					else:
+						j.tax_amount = float((j.rate / 100) * i.paid_amount or 0)
+						j.total = float(total_value - j.tax_amount or 0)
+						total_value = j.total
+				
 
 
+	
 	@frappe.whitelist()
 	def check_yield(self):
 		bulk_entries = self.get("bulk_payment_entry_details")
@@ -345,7 +477,6 @@ class BulkPaymentEntry(Document):
 		for bulk_entry in bulk_entries:
 			total_allocated = 0
 			paid_amount = bulk_entry.paid_amount
-			# frappe.throw(str(paid_amount))
 			if paid_amount != 0:
 				for reference in references:
 					if reference.reference_id == bulk_entry.reference_id:
@@ -360,12 +491,10 @@ class BulkPaymentEntry(Document):
 
 
 
-	# @frappe.whitelist()
-	# def get_party_filter(self):
-	# 	frappe.msgprint("hiii")
-	# 	party_list = [str(entry.party) for entry in self.get("bulk_payment_entry_details")]
-	# 	frappe.throw(str(party_list))
-	# 	return party_list
+	@frappe.whitelist()
+	def get_party_filter(self):
+		party_list = [str(entry.party) for entry in self.get("bulk_payment_entry_details")]
+		return party_list
 
 				
 	
@@ -432,3 +561,15 @@ class BulkPaymentEntry(Document):
 			doc.insert()
 			doc.save()
 			doc.submit()
+
+	# # def on_trash(self):
+	# # 	self.cancel_linked_payment_entries()
+	# # 	self.delete()
+
+	# # def cancel_linked_payment_entries(self):
+	# # 	linked_payment_entries = frappe.get_all("Payment Entry", filters={"custom_bulk_payment_entry": self.name})
+	# # 	for entry in linked_payment_entries:
+	# # 		payment_entry_doc = frappe.get_doc("Payment Entry", entry.name)
+	# # 		payment_entry_doc.cancel()
+
+

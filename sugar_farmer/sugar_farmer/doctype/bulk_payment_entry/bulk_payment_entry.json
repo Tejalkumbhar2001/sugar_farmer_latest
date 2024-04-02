@@ -18,6 +18,13 @@
   "section_break_f00vy",
   "bulk_payment_entry_details",
   "section_break_xfhbx",
+  "from_date",
+  "column_break_pvnyn",
+  "to_date",
+  "section_break_qliut",
+  "invoices",
+  "orders",
+  "section_break_dqmch",
   "payment_reference",
   "section_break_c5bjt",
   "taxes",
@@ -87,7 +94,8 @@
   },
   {
    "fieldname": "section_break_xfhbx",
-   "fieldtype": "Section Break"
+   "fieldtype": "Section Break",
+   "label": "Select Timespan to Get Outstanding Invoices and Outstanding Orders"
   },
   {
    "fieldname": "payment_reference",
@@ -123,6 +131,38 @@
    "fieldtype": "Table",
    "label": "Payment Entry Deduction",
    "options": "Bulk Payment Entry Deduction"
+  },
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date"
+  },
+  {
+   "fieldname": "column_break_pvnyn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date"
+  },
+  {
+   "fieldname": "orders",
+   "fieldtype": "Button",
+   "label": "Get OutStanding Orders"
+  },
+  {
+   "fieldname": "section_break_dqmch",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "section_break_qliut",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "invoices",
+   "fieldtype": "Button",
+   "label": "Get OutStanding Invoices"
   }
  ],
  "index_web_pages_for_search": 1,
@@ -133,7 +173,7 @@
    "link_fieldname": "custom_bulk_payment_entry"
   }
  ],
- "modified": "2024-04-01 14:07:05.589785",
+ "modified": "2024-04-01 22:04:57.555171",
  "modified_by": "Administrator",
  "module": "Sugar Farmer",
  "name": "Bulk Payment Entry",
